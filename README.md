@@ -1,10 +1,10 @@
 # Demo 3D (old)
 
-[Voronoi](https://github.com/nicogis/Demo3D/tree/master/js/3d/Voronoi)
+[Voronoi](https://github.nicogis.it/Demo3D/js/3d/Voronoi)
 
-[webGL](https://github.com/nicogis/Demo3D/tree/master/js/3d/webGLJS)
+[webGL](https://github.nicogis.it/Demo3D/js/3d/webGLJS)
 
-[Physics Engine](https://github.com/nicogis/Demo3D/tree/master/js/3d/PhysicsEngineJS)
+[Physics Engine](https://github.nicogis.it/Demo3D/js/3d/PhysicsEngineJS)
 
-[Physics Engine with Extent](https://github.com/nicogis/Demo3D/tree/master/js/3d/PhysicsEngineJSExtent)
+[Physics Engine with Extent](https://github.nicogis.it/Demo3D/js/3d/PhysicsEngineJSExtent)
 
