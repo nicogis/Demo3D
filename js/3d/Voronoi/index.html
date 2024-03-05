@@ -1,0 +1,209 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <title>Voronoi</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/4.0beta1/esri/css/esri.css">
+    <script src="https://js.arcgis.com/4.0beta1/"></script>
+    <script src="js/rhill-voronoi-core.min.js"></script>
+    <style>
+        html,
+        body {
+            padding: 0;
+            margin: 0;
+        }
+
+        #results {
+            top: 20px;
+            right: 20px;
+            position: absolute;
+            z-index: 99;
+            background-color: white;
+            border-radius: 8px;
+            padding: 10px;
+            opacity: 0.75;
+        }
+    </style>
+    <script>
+        //test Voronoi by Nicogis
+        var map, view, graphicsLayer;
+        var pointGraphic, polylineGraphic;
+        var points = [];
+        var voronoi;
+        var diagram;
+        var graphicsLayerPl;
+        var bbox = {};
+        require([
+            "esri/Map",
+            "esri/views/SceneView",
+            "esri/Camera",
+            "esri/layers/GraphicsLayer",
+            "esri/Graphic",
+            "esri/geometry/Point",
+            "esri/geometry/Polyline",
+            "esri/geometry/Polygon",
+            "esri/geometry/Multipoint",
+            "esri/symbols/SimpleMarkerSymbol",
+            "esri/symbols/SimpleLineSymbol",
+            "esri/symbols/SimpleFillSymbol",
+            "esri/geometry/geometryEngine",
+            "dojo/on",
+            "dojo/dom",
+            "dojo/domReady!"
+        ],
+          function (
+            Map, SceneView, Camera, GraphicsLayer,
+            Graphic, Point, Polyline, Polygon, Multipoint,
+            SimpleMarkerSymbol, SimpleLineSymbol, SimpleFillSymbol, geometryEngine, on, dom
+          ) {
+
+              map = new Map({
+                  basemap: "hybrid"
+              });
+
+              view = new SceneView({
+                  container: "viewDiv",
+                  map: map,
+                  camera: {
+                      position: [8.358300228434498, 45.81746666239542, 20000],
+                      heading: 0,
+                      tilt: 40
+                  }
+              });
+
+              /*********************
+               * Add graphics layers
+               *********************/
+
+              graphicsLayer = new GraphicsLayer();
+              map.add(graphicsLayer);
+              graphicsLayerPl = new GraphicsLayer();
+              map.add(graphicsLayerPl);
+
+
+              voronoi = new Voronoi();
+
+              markerSymbol = new SimpleMarkerSymbol({
+                  color: [226, 119, 40],
+                  outline: new SimpleLineSymbol({
+                      color: [255, 255, 255],
+                      width: 2
+                  })
+              });
+
+
+              on(dom.byId("clearBtn"), "click", function () {
+                  graphicsLayer.clear();
+                  graphicsLayerPl.clear();
+                  points = [];
+              });
+
+              on(view, 'tap', function (e) {
+                  // Exit if invalid or missing map point
+                  if (!e || !e.mapPoint) { return; }
+
+                  points.push(e.mapPoint);
+                  //console.log(e.mapPoint);
+
+                  pointGraphic = new Graphic({
+                      geometry: e.mapPoint,
+                      symbol: markerSymbol
+                  });
+
+                  graphicsLayer.add(pointGraphic);
+
+                  var mp = new Multipoint({spatialReference: map.spatialReference });
+                  
+                  for (i = 0; i < points.length; i++) {
+                      mp.addPoint(points[i]);
+                  }
+
+                  var extent = mp.getExtent();
+                  extent = extent.expand(1.5);
+                  bbox.xl = extent.xmin;
+                  bbox.xr = extent.xmax;
+                  bbox.yb = extent.ymax;
+                  bbox.yt = extent.ymin;
+
+                  voronoi.recycle(diagram);
+                  diagram = voronoi.compute(points, bbox);
+
+                  graphicsLayerPl.clear();
+
+                  var edges = diagram.edges;
+                  var iEdge = edges.length;
+                  var edge;
+                  var v1, v2;
+                  var pathsPl = [];
+                  while (iEdge--) {
+                      edge = edges[iEdge];
+                     
+                      v1 = edge.va;
+                      v2 = edge.vb;
+
+                      var pt1 = [];
+                      pt1.push(v1.x);
+                      pt1.push(v1.y);
+
+                      var pt2 = [];
+                      pt2.push(v2.x);
+                      pt2.push(v2.y);
+
+                      pathsPl.push([pt1, pt2]);
+
+                  }
+
+                  if (pathsPl.length == 0) {
+                      return;
+                  }
+
+
+                  var polyline = new Polyline({ spatialReference: map.spatialReference, paths: pathsPl });
+
+                  polyline = geometryEngine.densify(polyline, 50, "meters");
+
+                  
+                  for (i = 0; i < polyline.paths.length; i++) {
+                      for (j = 0; j < polyline.paths[i].length; j++) {
+                          k = polyline.paths[i][j];
+                          t = new Point(k.x, k.y, 0, map.spatialReference);
+                          z = view.basemapTerrain.getElevation(t);
+                          polyline.paths[i][j].push(z);
+                      }
+                  }
+
+
+
+                  lineSymbol = new SimpleLineSymbol({
+                      color: [255, 0, 0],
+                      width: 4
+                  });
+
+                  polylineGraphic = new Graphic({
+                      geometry: polyline,
+                      symbol: lineSymbol
+                  });
+
+                  graphicsLayerPl.add(polylineGraphic);
+
+
+
+
+              });
+
+
+
+
+          });
+    </script>
+</head>
+<body>
+    <div id="viewDiv">
+        <div id="results">
+            <button id="clearBtn">Clear</button>
+            <span id="quoteSpan"></span>
+        </div>
+    </div>
+</body>
+</html>
