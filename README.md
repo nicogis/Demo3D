@@ -12,5 +12,5 @@
 
 This sample shows the differences in linear and areal measurements performed in Web Mercator,and UTM
 
-[Web Mercator UTM](https://github.nicogis.it/Demo3D/js/WebMercatorUTM)
+[Web Mercator UTM](https://github.nicogis.it/Demo3D/js/WebMercatorUTM/)
 
