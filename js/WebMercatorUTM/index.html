@@ -1,0 +1,276 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no"/>
+    <title>Area and Distance Measurements</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/3.8/js/esri/css/esri.css">
+    <style type="text/css">
+        html, body, #mapDiv {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #fff;
+            color: #333;
+            font-size: 12pt;
+            font-family: "Trebuchet MS";
+        }
+
+        #mapDiv {
+            border-right: solid 1px #ccc;
+            border-left: solid 1px #ccc;
+        }
+
+        #measureVals {
+            padding: 5px;
+            width: 320px;
+        }
+
+        #results {
+            padding: 4px;
+            margin: 4px;
+        }
+
+        #instructions {
+            font-size: smaller;
+            margin-bottom: 5px;
+        }
+    </style>
+    <script src="https://js.arcgis.com/3.8/"></script>
+
+
+   
+    
+
+    <script>
+        require([
+            "dojo/ready",
+            "dojo/on",
+            "dojo/promise/all",
+            "dojo/_base/connect",
+            "dojo/parser",
+            "dojo/dom",
+            "esri/map",
+            "esri/config",
+            "esri/graphic",
+            "esri/SpatialReference",
+            "esri/symbols/SimpleFillSymbol",
+            "esri/symbols/SimpleLineSymbol",
+            "esri/tasks/GeometryService",
+            "esri/tasks/LengthsParameters",
+            "esri/tasks/AreasAndLengthsParameters",
+            "esri/toolbars/draw"
+        ], function (
+            ready,
+            on,
+            all,
+            connect,
+            parser,
+            dom,
+            Map,
+            config,
+            Graphic,
+            SpatialReference,
+            SimpleFillSymbol,
+            SimpleLineSymbol,
+            GeometryService,
+            LengthsParameters,
+            AreasAndLengthsParameters,
+            Draw
+
+          ) {
+            ready(function () {
+                parser.parse();
+
+
+                window.map = new esri.Map("mapDiv", {
+                    basemap: "topo",
+                    center: [9.56, 45.22],
+                    zoom: 10
+                });
+
+                window.map.on("load", function () {
+                    //create the drawing toolbar
+                    window.toolbar = new Draw(window.map);
+                    connect.connect(window.toolbar, "onDrawEnd", getMeasureResults);
+                    //setup listeners for button click events
+                    on(dom.byId("polyline"), "click", function () {
+                        window.toolbar.activate(Draw.FREEHAND_POLYLINE);
+                    });
+                    on(dom.byId("polygon"), "click", function () {
+                        window.toolbar.activate(Draw.FREEHAND_POLYGON);
+                    });
+
+                });
+
+                //define the geometry service and the proxy url
+                config.defaults.geometryService = new GeometryService("https://sampleserver6.arcgisonline.com/arcgis/rest/services/Utilities/Geometry/GeometryServer");
+
+                // configure proxy
+                //config.defaults.io.proxyUrl = "proxy/proxy.ashx";
+
+
+                function getMeasureResults(geometry) {
+                    //console.log(geometry);
+                    clearResults(); //clear any existing results
+
+                    //project the geometry to utm and state plane coordinates. Once that is done
+                    //we can get the measurements.
+                    var utm32 = config.defaults.geometryService.project([geometry], new SpatialReference(32632));
+                    var utm33 = config.defaults.geometryService.project([geometry], new SpatialReference(32633));
+                    all({ utm32Results: utm32, utm33Results: utm33 }).then(function (results) {
+
+                        //Projections complete - now lets get the projected geometry and measure.
+                        var utm32Geometry = results["utm32Results"];
+                        var utm33Geometry = results["utm33Results"];
+
+
+                        //add the graphics to the map then get the areas and lengths.
+                        var measureUTM33, measureWM, measureUTM32;
+                        var wmParams, utm33Params, utm32Params;
+
+
+                        if (geometry.type === "polyline") {
+                            addShapeToMap(geometry, new SimpleLineSymbol());
+
+                            wmParams = new LengthsParameters();
+                            wmParams.polylines = [geometry];
+                            measureWM = config.defaults.geometryService.lengths(wmParams);
+
+                            utm32Params = new LengthsParameters();
+                            utm32Params.polylines = utm32Geometry;
+                            measureUTM32 = config.defaults.geometryService.lengths(utm32Params);
+
+                            utm33Params = new LengthsParameters();
+                            utm33Params.polylines = utm33Geometry;
+                            measureUTM33 = config.defaults.geometryService.lengths(utm33Params);
+
+
+                            all({
+                                WMDetails: measureWM,
+                                UTM33Details: measureUTM33,
+                                UTM32Details: measureUTM32
+                            }).then(displayPolylineResults);
+
+                        } else if (geometry.type === "polygon") {
+                            addShapeToMap(geometry, new SimpleFillSymbol());
+                            wmParams = new AreasAndLengthsParameters();
+                            wmParams.polygons = [geometry];
+                            measureWM = config.defaults.geometryService.areasAndLengths(wmParams);
+
+                            utm32Params = new AreasAndLengthsParameters();
+                            utm32Params.polygons = utm32Geometry;
+                            measureUTM32 = config.defaults.geometryService.areasAndLengths(utm32Params);
+
+                            utm33Params = new AreasAndLengthsParameters();
+                            utm33Params.polygons = utm33Geometry;
+                            measureUTN33 = config.defaults.geometryService.areasAndLengths(utm33Params);
+
+                            all({
+                                WMDetails: measureWM,
+                                UTM33Details: measureUTM33,
+                                UTM32Details: measureUTM32
+                            }).then(displayPolygonResults);
+                        }
+
+
+
+                    });
+                }
+
+
+
+
+
+                function addShapeToMap(geometry, symbol) {
+                    var graphic = new Graphic(geometry, symbol);
+                    window.map.graphics.add(graphic);
+
+
+                }
+
+                function displayPolylineResults(results) {
+                    //WMDetails, SPDetails, UTMDetails
+                    var wm = results["WMDetails"];
+                    var utm33 = results["UTM33Details"];
+                    var utm32 = results["UTM32Details"];
+                    if (wm && wm.lengths) {
+                        dom.byId("wmVal").innerHTML = "<b>Web Mercator (WKID:102100)</b> <br />Length:" + Math.round(wm.lengths[0]) + " meters <br /><br />";
+                    }
+                    if (utm32 && utm32.lengths) {
+                        dom.byId("utm32Val").innerHTML = "<b>UTM Zone 32 (WKID:32632)</b><br />Length:" + Math.round(utm32.lengths[0]) + " meters <br /><br/>";
+                    }
+                    if (utm33 && utm33.lengths) {
+                        dojo.byId("utm33Val").innerHTML = "<b>UTM Zone 33(WKID:32633)</b><br />Length:" + Math.round(utm33.lengths[0]) + " meters <br /><br/>";
+                    }
+                }
+
+                function displayPolygonResults(results) {
+                    //WMDetails, SPDetails, UTMDetails
+                    var wm = results["WMDetails"];
+                    var utm33 = results["UTM33Details"];
+                    var utm32 = results["UTM32Details"];
+                    if (wm && wm.lengths & wm.areas) {
+                        var content = "Area:" + Math.round(wm.areas[0]) + " square meters <br />Length:" + Math.round(wm.lengths[0]) + " meters";
+                        dom.byId("wmVal").innerHTML = "<b>Web Mercator (WKID:102100)</b> <br />" + content + "<br /><br />";
+                    }
+                    if (utm32 && utm32.lengths && utm32.areas) {
+                        var content = "Area:" + Math.round(utm32.areas[0]) + " square meters <br />Length:" + Math.round(utm32.lengths[0]) + " meters";
+                        dom.byId("utm32Val").innerHTML = "<b>UTM Zone 32 (WKID:32632)</b><br />" + content + "<br /><br />";
+                    }
+
+                    console.log(utm33);
+
+                    if (utm33 && utm33.lengths && utm33.areas) {
+                        var content = "Area:" + Math.round(utm33.areas[0]) + " square meters <br />Length:" + Math.round(utm33.lengths[0]) + " meters";
+                        dom.byId("utm33Val").innerHTML = "<b>UTM Zone 33 (WKID:32633)</b><br />" + content+ "<br /><br />";
+                    }
+
+                }
+
+                function clearResults() {
+                    dom.byId("wmVal").innerHTML = "";
+                    dom.byId("utm33Val").innerHTML = "";
+                    dom.byId("utm32Val").innerHTML = "";
+                    window.toolbar.deactivate();
+                    window.map.graphics.clear();
+
+
+                }
+
+
+            });
+
+        });
+
+
+    </script>
+
+</head>
+
+<body>
+    <div id="mainWindow" data-dojo-type="dijit/layout/BorderContainer" data-dojo-props="design:'sidebar',gutters:false" style="width: 100%; height: 100%;">
+
+
+        <div id="mapDiv" data-dojo-type="dijit/layout/ContentPane" region="center"></div>
+
+        <div id="measureVals" region="right" data-dojo-type="dijit/layout/ContentPane">
+            <div id="instructions">
+                This sample shows the differences in linear and areal measurements performed in Web Mercator,
+      and UTM.
+            </div>
+            <button id="polyline">Draw polyline</button>
+            <button id="polygon">Draw polygon</button>
+            <div id="results">
+                <div id="wmVal"></div>
+                <div id="utm32Val"></div>
+                <div id="utm33Val"></div>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>
